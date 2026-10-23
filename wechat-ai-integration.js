@@ -55,6 +55,7 @@
       '<div class="wsai-grid"><div><label>协议</label><select id="wsai-protocol"><option value="chat">OpenAI Chat Completions 兼容</option><option value="anthropic">Anthropic Messages</option></select></div><div><label>API Key（仅保存在本机）</label><input id="wsai-key" type="password" autocomplete="new-password" placeholder="留空则保留已保存的 Key"></div></div>',
       '<label>本机工具提示词</label><textarea id="wsai-prompt" placeholder="按群聊内容生成摘要、分类、待办、来源与下一步"></textarea>',
       '<div class="wsai-actions"><button id="wsai-save-config" class="primary">保存本机模型配置</button><button id="wsai-test-model">测试 API</button></div>',
+      '<h3>飞书私有链接授权（可选）</h3><div class="wsai-muted">公开飞书页面会先尝试直接读取。私有 Wiki / 文档需使用你自己的飞书自建应用凭证；应用只读权限由你在飞书开放平台授予，密钥只保存在当前上岸鸭账号会话的服务端配置中。</div><div class="wsai-grid"><div><label>飞书 App ID</label><input id="wsai-feishu-app-id" placeholder="cli_..." autocomplete="off"></div><div><label>飞书 App Secret（不会回显）</label><input id="wsai-feishu-app-secret" type="password" autocomplete="new-password" placeholder="留空则保留已保存密钥"></div></div><div class="wsai-actions"><button id="wsai-feishu-load">检查飞书授权</button><button id="wsai-feishu-save" class="primary">保存飞书只读授权</button><button id="wsai-feishu-clear">清除飞书授权</button></div><div id="wsai-feishu-status" class="wsai-muted">尚未检查飞书授权。</div>',
       '<h3>第三步：取得真实微信消息或导入原始数据</h3><div class="wsai-grid"><div><label>群聊名称</label><input id="wsai-group" placeholder="输入准确的微信群名称"></div><div><label>时间范围（小时）</label><input id="wsai-hours" type="number" min="0.1" max="720" value="24"></div></div>',
       '<div class="wsai-actions"><button id="wsai-read-live">从本机微信读取消息</button><label style="margin:0;flex:1"><input id="wsai-file" type="file" accept=".txt,.md,.json,.csv,.html,.xml,.log" style="padding:7px">导入微信原始数据文件</label></div>',
       '<label>原始消息（可检查、可编辑；不会自动发送到群里）</label><textarea id="wsai-raw" placeholder="读取器取得的真实消息或你主动导入的原始数据会显示在这里。也可以粘贴已导出的聊天记录。"></textarea>',
@@ -75,6 +76,9 @@
     $('wsai-load-config').onclick = loadConfig;
     $('wsai-save-config').onclick = saveConfig;
     $('wsai-test-model').onclick = testModel;
+    $('wsai-feishu-load').onclick = loadFeishuConfig;
+    $('wsai-feishu-save').onclick = saveFeishuConfig;
+    $('wsai-feishu-clear').onclick = clearFeishuConfig;
     $('wsai-read-live').onclick = readLive;
     $('wsai-file').addEventListener('change', importFile);
     $('wsai-analyze').onclick = analyze;
@@ -158,6 +162,37 @@
       var d = await localApi('/api/test', 'POST', { service_name: $('wsai-provider-name').value.trim() });
       setStatus('API 连接成功：' + d.provider + ' / ' + d.model + '；返回：' + d.reply, false);
     } catch (e) { setStatus('API 测试失败：' + e.message, true); }
+  }
+  async function loadFeishuConfig() {
+    try {
+      var r = await fetch('/api/feishu-config', { credentials: 'same-origin', cache: 'no-store' });
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      $('wsai-feishu-app-id').value = d.app_id || '';
+      $('wsai-feishu-app-secret').value = '';
+      $('wsai-feishu-status').textContent = d.configured ? '已配置飞书应用凭证（Secret 不回显）。若读取失败，请检查应用权限、文档授权和发布状态。' : '尚未配置。请在飞书开放平台创建自建应用并开通 Wiki / 文档只读权限。';
+      $('wsai-feishu-status').style.color = d.configured ? '#176b4d' : '#687a70';
+    } catch (e) { $('wsai-feishu-status').textContent = '读取飞书授权状态失败：' + e.message; $('wsai-feishu-status').style.color = '#b42318'; }
+  }
+  async function saveFeishuConfig() {
+    try {
+      var r = await fetch('/api/feishu-config', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_id: $('wsai-feishu-app-id').value.trim(), app_secret: $('wsai-feishu-app-secret').value.trim() }) });
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      $('wsai-feishu-app-secret').value = '';
+      $('wsai-feishu-status').textContent = d.configured ? '飞书只读凭证已保存在当前账号会话的服务端；Secret 不会回传网页。' : '飞书授权未完整配置。';
+      $('wsai-feishu-status').style.color = d.configured ? '#176b4d' : '#b42318';
+    } catch (e) { $('wsai-feishu-status').textContent = '保存飞书授权失败：' + e.message; $('wsai-feishu-status').style.color = '#b42318'; }
+  }
+  async function clearFeishuConfig() {
+    try {
+      var r = await fetch('/api/feishu-config', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clear: true }) });
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+      $('wsai-feishu-app-id').value = ''; $('wsai-feishu-app-secret').value = '';
+      $('wsai-feishu-status').textContent = '已清除当前账号会话中的飞书应用凭证。'; $('wsai-feishu-status').style.color = '#176b4d';
+    } catch (e) { $('wsai-feishu-status').textContent = '清除飞书授权失败：' + e.message; $('wsai-feishu-status').style.color = '#b42318'; }
   }
   async function readLive() {
     try {
