@@ -186,11 +186,11 @@
   function extractUrls(text) {
     var m = String(text || '').match(/https?:\/\/[^\s<>"'，。；;）)】\]]+/g) || [];
     var seen = {};
-    return m.map(function (u) { return u.replace(/[.,!?]+$/, ''); }).filter(function (u) { if (seen[u]) return false; seen[u] = true; return true; }).slice(0, 20);
+    return m.map(function (u) { return u.replace(/[.,!?]+$/, ''); }).filter(function (u) { if (seen[u]) return false; seen[u] = true; return true; }).slice(0, 50);
   }
   async function readOneLink(url) {
     var route = /feishu\.cn|larksuite\.com/i.test(url) ? '/api/feishu' :
-      /bilibili\.com|b23\.tv|douyin\.com|iesdouyin\.com|xiaohongshu\.com|youtube\.com|youtu\.be/i.test(url) ? '/api/video' : '/api/extract';
+      /bilibili\.com|b23\.tv|douyin\.com|iesdouyin\.com|xiaohongshu\.com|youtube\.com|youtu\.be/i.test(url) ? '/api/video' : '/api/extract-any';
     try {
       var d = await siteApi(route, { url: url });
       return { url: url, status: '读取成功', title: d.title || url, text: String(d.text || d.description || d.note || '').slice(0, 5000), source: d.source || route, thin: !!d.thin, note: d.note || '' };
@@ -208,14 +208,21 @@
       row.append(title, node('div'), a, detail); box.appendChild(row);
     });
   }
+  async function readManyLinks(urls) {
+    var out = [];
+    for (var i = 0; i < urls.length; i += 4) {
+      var batch = await Promise.all(urls.slice(i, i + 4).map(readOneLink));
+      out = out.concat(batch); showLinks(out);
+    }
+    return out;
+  }
   async function readLinksOnly() {
     var raw = $('wsai-raw').value.trim();
     if (!raw) { setStatus('请先读取或导入微信原始数据。', true); return; }
     var urls = extractUrls(raw);
     if (!urls.length) { showLinks([]); setStatus('原始消息中没有发现 HTTP/HTTPS 链接。', false); return; }
     setStatus('正在逐条读取 ' + urls.length + ' 个链接；受登录权限或平台限制的链接会显示失败。', false);
-    var results = [];
-    for (var i = 0; i < urls.length; i++) { results.push(await readOneLink(urls[i])); showLinks(results); }
+    var results = await readManyLinks(urls);
     setStatus('链接读取结束：成功 ' + results.filter(function (x) { return x.status === '读取成功' && !x.thin; }).length + ' / ' + results.length + '；登录墙和私有链接需授权。', false);
   }
   async function analyze() {
@@ -224,7 +231,7 @@
     lastRaw = raw.slice(0, 160000);
     var urls = extractUrls(raw), links = [];
     setStatus('先读取消息中的链接，再调用你配置的原始数据 AI……', false);
-    for (var i = 0; i < urls.length; i++) { links.push(await readOneLink(urls[i])); showLinks(links); }
+    links = await readManyLinks(urls);
     try {
       var d = await localApi('/api/analyze', 'POST', {
         service_name: $('wsai-provider-name').value.trim() || $('wsai-provider').value,
