@@ -64,6 +64,6 @@ app.get('/api/cc-switch',(req,res)=>fail(res,410,'此版本不依赖 CC Switch�
 app.post('/api/cc-switch/connect',(req,res)=>fail(res,410,'此版本不依赖 CC Switch，请使用官方模型 API 配置。','CC_SWITCH_REMOVED'));
 app.get('/health',(req,res)=>res.json({ok:true,service:'shanganya-ai-workbench'}));
 app.get('/wechat-ai-integration.js',(req,res)=>res.sendFile(path.join(__dirname,'wechat-ai-integration.js')));
-app.get('*',(req,res,next)=>{fsp.readFile(path.join(__dirname,'index.html'),'utf8').then(html=>{if(!html.includes('/wechat-ai-integration.js'))html=html.replace(/<\\/body>/i,'<script src="/wechat-ai-integration.js" defer></script></body>');res.type('html').send(html);}).catch(next);});
+app.get('*',(req,res,next)=>{fsp.readFile(path.join(__dirname,'index.html'),'utf8').then(html=>{if(!html.includes('/wechat-ai-integration.js'))html=html.replace(/<\/body>/i,'<script src="/wechat-ai-integration.js" defer></script></body>');res.type('html').send(html);}).catch(next);});
 app.use((err,req,res,next)=>{console.error(err);if(res.headersSent)return next(err);fail(res,500,'服务器内部错误：'+safeError(err),'INTERNAL_ERROR');});
 (async()=>{try{await fsp.mkdir(SESSION_DIR,{recursive:true});}catch(e){console.error('data directory warning:',e.message);}app.listen(PORT,'0.0.0.0',()=>console.log('Shanganya AI workbench listening on '+PORT));})();
